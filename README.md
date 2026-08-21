@@ -1,4 +1,5 @@
-# Web Contracts
+# Lippy Agent
+
 
 Websites change. Your API shouldn't. See [`SPEC.md`](./SPEC.md) for the full
 architecture, judging-criteria mapping, and demo script.
