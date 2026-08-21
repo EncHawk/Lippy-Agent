@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Next.js build output
+.next/
+out/
+build/
+.vercel/
+
+# Production
+*.tsbuildinfo
+next-env.d.ts
+
+# Env (never commit)
+.env
+.env.local
+.env.*.local
+
+# Prisma generated client + SQLite db (dev only)
+prisma/dev.db
+prisma/dev.db-journal
+
+# Editor
+.vscode/
+.idea/
+.DS_Store
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# Test
+coverage/
+
+test.md
+SPEC.md 
+INITIAL_SPEC.md

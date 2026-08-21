@@ -1,0 +1,50 @@
+// Datasource is whatever DATABASE_URL points at (Postgres in deployment,
+// works with any Postgres provider). No hardcoded connection info here —
+// the URL comes exclusively from .env.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Contract {
+  id              String   @id @default(cuid())
+  url             String
+  schema          String   // JSON-encoded ContractField[]
+  pollIntervalMs  Int      @default(300000)
+  status          String   @default("healthy") // healthy | degraded | healing | broken
+  collectorId     String?  // Bright Data collector id (c_*)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  runs   Run[]
+  events ContractEvent[]
+}
+
+model Run {
+  id           String   @id @default(cuid())
+  contractId   String
+  contract     Contract @relation(fields: [contractId], references: [id])
+  startedAt    DateTime @default(now())
+  finishedAt   DateTime?
+  outcome      String?  // valid | violated | healed | escalated
+  rawOutput    String?  // JSON-encoded raw extraction
+  validated    String?  // JSON-encoded validated fields
+  violations   String?  // JSON-encoded list of field-level violations
+
+  @@index([contractId, startedAt])
+}
+
+model ContractEvent {
+  id         String   @id @default(cuid())
+  contractId String
+  contract   Contract @relation(fields: [contractId], references: [id])
+  type       String   // contract.violated | contract.healed | contract.escalated | field.changed
+  payload    String   // JSON-encoded ContractEvent union member
+  createdAt  DateTime @default(now())
+
+  @@index([contractId, createdAt])
+}
