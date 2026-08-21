@@ -18,11 +18,11 @@ type Event = {
 };
 
 const TYPE_STYLES: Record<string, string> = {
-  "contract.violated": "bg-red-50 text-red-800 border-red-200",
-  "contract.healing": "bg-blue-50 text-blue-800 border-blue-200",
-  "contract.healed": "bg-emerald-50 text-emerald-800 border-emerald-200",
-  "contract.escalated": "bg-red-100 text-red-900 border-red-300",
-  "field.changed": "bg-amber-50 text-amber-800 border-amber-200",
+  "contract.violated": "event-violated",
+  "contract.healing": "event-healing",
+  "contract.healed": "event-healed",
+  "contract.escalated": "event-escalated",
+  "field.changed": "event-changed",
 };
 
 /**
@@ -54,40 +54,39 @@ export function EventFeed({ contractId }: { contractId: string }) {
   }, [contractId]);
 
   return (
-    <div className="rounded-lg border border-neutral-200">
-      <div className="flex items-center justify-between border-b border-neutral-200 px-4 py-2">
-        <h3 className="text-sm font-medium text-neutral-900">Live events</h3>
-        <span className={`flex items-center gap-1.5 text-xs ${connected ? "text-emerald-700" : "text-neutral-500"}`}>
-          <span className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-emerald-500" : "bg-neutral-400"}`} />
+    <div className="data-panel event-panel">
+      <div className="data-panel-heading"><h3>Live events</h3>
+        <span className={`event-connection ${connected ? "connected" : ""}`}>
+          <span className="status-dot" />
           {connected ? "connected" : "disconnected"}
         </span>
       </div>
-      <ul className="max-h-80 overflow-y-auto divide-y divide-neutral-100">
+      <ul className="event-list">
         {events.length === 0 && (
-          <li className="px-4 py-3 text-sm text-neutral-500">
-            Waiting for events. Click <span className="font-medium">Run now</span> to trigger a cycle.
+          <li className="event-empty">
+            Waiting for events. Click <strong>Run now</strong> to trigger a cycle.
           </li>
         )}
         {events.map((event, i) => (
-          <li key={i} className="px-4 py-2 text-sm">
-            <div className="flex items-center gap-2">
+          <li key={i} className="event-row">
+            <div className="event-row-top">
               <span
-                className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${TYPE_STYLES[event.type] ?? "bg-neutral-100 text-neutral-700 border-neutral-200"}`}
+                className={`event-type ${TYPE_STYLES[event.type] ?? "event-default"}`}
               >
                 {event.type}
               </span>
               {event.attempt !== undefined && (
-                <span className="text-xs text-neutral-500">attempt {event.attempt}</span>
+                <span className="event-attempt">attempt {event.attempt}</span>
               )}
-              <span className="ml-auto text-[11px] text-neutral-400">{event.ts?.slice(11, 19)}</span>
+              <span className="event-time">{event.ts?.slice(11, 19)}</span>
             </div>
-            {event.summary && <p className="mt-1 text-xs text-neutral-700">{event.summary}</p>}
-            {event.reason && <p className="mt-1 text-xs text-red-700">{event.reason}</p>}
+            {event.summary && <p className="event-summary">{event.summary}</p>}
+            {event.reason && <p className="event-reason">{event.reason}</p>}
             {event.type === "field.changed" && (
-              <p className="mt-1 text-xs text-neutral-700">
+              <p className="event-summary">
                 {event.field}: {String(event.previousValue)} → {String(event.currentValue)}
                 {event.confidence !== undefined && (
-                  <span className="ml-2 text-neutral-500">confidence {event.confidence.toFixed(2)}</span>
+                  <span className="event-confidence">confidence {event.confidence.toFixed(2)}</span>
                 )}
               </p>
             )}

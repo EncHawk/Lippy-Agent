@@ -34,17 +34,17 @@ export function RunButton({ contractId }: { contractId: string }) {
   }
 
   return (
-    <div className="flex items-center gap-3">
+    <div className="run-control">
       <button
         type="button"
         onClick={onClick}
         disabled={state === "running"}
-        className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
+        className="run-button"
       >
         {state === "running" ? "Running…" : "Run now"}
       </button>
       {message && (
-        <span className={`text-xs ${state === "error" ? "text-red-600" : "text-neutral-600"}`}>
+        <span className={`run-message ${state === "error" ? "run-error" : ""}`}>
           {message}
         </span>
       )}

@@ -38,27 +38,23 @@ export function LineageGraph({ runs, events }: { runs: Run[]; events: Event[] })
   }
 
   return (
-    <div className="rounded-lg border border-neutral-200">
-      <div className="border-b border-neutral-200 px-4 py-2">
-        <h3 className="text-sm font-medium text-neutral-900">Run history</h3>
-      </div>
-      <ol className="divide-y divide-neutral-100">
+    <div className="data-panel history-panel">
+      <div className="data-panel-heading"><h3>Run history</h3><span className="mono-label">LINEAGE</span></div>
+      <ol className="history-list">
         {runs.length === 0 && (
-          <li className="px-4 py-3 text-sm text-neutral-500">No runs yet.</li>
+          <li className="history-empty">No runs yet.</li>
         )}
         {runs.map((run) => (
-          <li key={run.id} className="px-4 py-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-neutral-500">
-                  {new Date(run.startedAt).toISOString().slice(0, 19).replace("T", " ")}
-                </span>
-                {run.outcome && <StatusBadge status={run.outcome} />}
+          <li key={run.id} className="history-row">
+            <div className="history-main">
+              <div className="history-date">
+                {new Date(run.startedAt).toISOString().slice(0, 19).replace("T", " ")}
               </div>
-              <span className="text-xs text-neutral-400">
-                {(eventsByRunId.get(run.id) ?? []).length} event(s)
-              </span>
+              {run.outcome && <StatusBadge status={run.outcome} />}
             </div>
+            <span className="history-events">
+              {(eventsByRunId.get(run.id) ?? []).length} event(s)
+            </span>
           </li>
         ))}
       </ol>

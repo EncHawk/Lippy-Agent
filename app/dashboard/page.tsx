@@ -1,22 +1,25 @@
 import { ContractList } from "@/components/dashboard/ContractList";
+import { AppHeader } from "@/components/AppHeader";
+import { SiteFooter } from "@/components/SiteFooter";
 
 export default function DashboardPage() {
   return (
-    <main className="mx-auto max-w-3xl px-6 py-12">
-      <div className="flex items-baseline justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-neutral-900">Contracts</h1>
-          <p className="mt-1 text-sm text-neutral-500">
-            Every contract you've defined, with its current health and a link into the detail view.
-          </p>
+    <main className="app-shell">
+      <div className="app-frame">
+        <AppHeader />
+        <div className="app-page-heading">
+          <div>
+            <p className="app-eyebrow"><i /> CONTROL ROOM / 01</p>
+            <h1>Contracts</h1>
+            <p className="app-description">Every contract you&apos;ve defined, with its current health and a link into the detail view.</p>
+          </div>
+          <a href="/" className="app-back-link">← Home</a>
         </div>
-        <a href="/" className="text-xs text-neutral-500 hover:text-neutral-700">
-          ← Home
-        </a>
+        <section className="app-panel-list" aria-label="Contracts">
+          <ContractList />
+        </section>
       </div>
-      <div className="mt-8">
-        <ContractList />
-      </div>
+      <SiteFooter />
     </main>
   );
 }

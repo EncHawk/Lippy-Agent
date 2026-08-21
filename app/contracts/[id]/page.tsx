@@ -6,6 +6,8 @@ import { StatusBadge } from "@/components/dashboard/StatusBadge";
 import { RunButton } from "@/components/dashboard/RunButton";
 import { EventFeed } from "@/components/dashboard/EventFeed";
 import { LineageGraph } from "@/components/dashboard/LineageGraph";
+import { AppHeader } from "@/components/AppHeader";
+import { SiteFooter } from "@/components/SiteFooter";
 
 /**
  * /contracts/:id — the per-contract detail page.
@@ -33,59 +35,60 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
     : null;
 
   return (
-    <main className="mx-auto max-w-4xl px-6 py-10">
-      <Link href="/dashboard" className="text-xs text-neutral-500 hover:text-neutral-700">
-        ← All contracts
-      </Link>
+    <main className="app-shell">
+      <div className="app-frame app-detail-frame">
+        <AppHeader />
+        <Link href="/dashboard" className="app-back-link">← All contracts</Link>
 
-      <header className="mt-3 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="break-all text-xl font-semibold text-neutral-900">{contract.url}</h1>
-          <p className="mt-1 text-xs text-neutral-500">
-            id <code className="rounded bg-neutral-100 px-1 py-0.5">{contract.id}</code>
-            {" · "}
-            collector <code className="rounded bg-neutral-100 px-1 py-0.5">{contract.collectorId ?? "—"}</code>
-            {" · "}
-            poll every {Math.round(contract.pollIntervalMs / 1000)}s
-          </p>
-        </div>
-        <div className="flex flex-col items-end gap-2">
-          <StatusBadge status={contract.status} />
-          <RunButton contractId={contract.id} />
-        </div>
-      </header>
-
-      <section className="mt-8 grid gap-6 md:grid-cols-2">
-        <div className="rounded-lg border border-neutral-200">
-          <div className="border-b border-neutral-200 px-4 py-2">
-            <h3 className="text-sm font-medium text-neutral-900">Schema</h3>
+        <header className="detail-header">
+          <div>
+            <p className="app-eyebrow"><i /> CONTRACT / LIVE SURFACE</p>
+            <h1>{contract.url}</h1>
+            <p className="detail-meta">
+              id <code>{contract.id}</code>
+              {" · "}
+              collector <code>{contract.collectorId ?? "—"}</code>
+              {" · "}
+              poll every {Math.round(contract.pollIntervalMs / 1000)}s
+            </p>
           </div>
-          <ul className="divide-y divide-neutral-100">
+          <div className="detail-actions">
+            <StatusBadge status={contract.status} />
+            <RunButton contractId={contract.id} />
+          </div>
+        </header>
+
+        <section className="detail-grid">
+          <div className="data-panel">
+            <div className="data-panel-heading"><h3>Schema</h3><span className="mono-label">CONTRACT.JSON</span></div>
+            <ul className="data-list">
             {fields.map((f) => (
-              <li key={f.key} className="flex items-center justify-between px-4 py-2 text-sm">
+              <li key={f.key}>
                 <div>
-                  <span className="font-mono font-medium text-neutral-900">{f.key}</span>
-                  <span className="ml-2 text-xs text-neutral-500">{f.type}</span>
+                  <span className="data-key">{f.key}</span>
+                  <span className="data-type">{f.type}</span>
                   {f.required && (
-                    <span className="ml-2 text-[10px] uppercase tracking-wide text-red-600">required</span>
+                    <span className="data-required">required</span>
                   )}
                 </div>
                 {lastValidated && (
-                  <span className="font-mono text-xs text-neutral-700">
+                  <span className="data-value">
                     {JSON.stringify(lastValidated[f.key])}
                   </span>
                 )}
               </li>
             ))}
           </ul>
-        </div>
+          </div>
 
-        <EventFeed contractId={contract.id} />
-      </section>
+          <EventFeed contractId={contract.id} />
+        </section>
 
-      <section className="mt-6">
-        <LineageGraph runs={runs} events={events} />
-      </section>
+        <section className="detail-history">
+          <LineageGraph runs={runs} events={events} />
+        </section>
+      </div>
+      <SiteFooter />
     </main>
   );
 }

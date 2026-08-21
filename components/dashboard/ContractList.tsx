@@ -27,26 +27,26 @@ export function ContractList() {
   }, []);
 
   if (contracts === null) {
-    return <p className="text-sm text-neutral-500">Loading contracts…</p>;
+    return <p className="app-loading">Loading contracts...</p>;
   }
 
   if (contracts.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-neutral-300 p-8 text-center">
-        <p className="text-sm text-neutral-600">No contracts yet.</p>
-        <p className="mt-1 text-sm text-neutral-500">Define a URL and a schema to start one.</p>
+      <div className="app-empty-state">
+        <p>No contracts yet.</p>
+        <p>Define a URL and a schema to start one.</p>
       </div>
     );
   }
 
   return (
-    <ul className="divide-y divide-neutral-200 rounded-lg border border-neutral-200">
+    <ul className="contract-list">
       {contracts.map((c) => (
         <li key={c.id}>
-          <Link href={`/contracts/${c.id}`} className="flex items-center justify-between px-4 py-3 hover:bg-neutral-100">
+          <Link href={`/contracts/${c.id}`} className="contract-row">
             <div>
-              <p className="font-medium text-neutral-900">{c.url}</p>
-              <p className="text-xs text-neutral-500">{c.id}</p>
+              <p className="contract-url">{c.url}</p>
+              <p className="contract-id">{c.id}</p>
             </div>
             <StatusBadge status={c.status} />
           </Link>
