@@ -1,69 +1,39 @@
-import { NextRequest } from "next/server";
-import { eventBus } from "@/lib/events/bus";
-
-/**
- * GET /api/contracts/:id/events -> Server-Sent Events stream filtered to
- * one contract. Subscribes to the in-process event bus on connect,
- * forwards each event as a `data: ...\n\n` SSE frame, and emits a
- * comment heartbeat every 15s so intermediaries don't drop the connection.
- *
- * The detail page opens this with EventSource to render the live event
- * timeline without polling.
- */
-export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const { id: contractId } = await ctx.params;
-
+import { requireUser } from "@/lib/auth/service";
+import { getContract } from "@/lib/contracts/service";
+import { readEvents } from "@/lib/events/bus";
+import { cursor, endpoint } from "@/lib/http";
+export const dynamic = "force-dynamic";
+export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) { return endpoint(async () => {
+  const owner = await requireUser(req), { id } = await ctx.params;
+  await getContract(id, owner);
+  let after = cursor(req.headers.get("last-event-id") ?? new URL(req.url).searchParams.get("after"));
+  if (!req.headers.get("accept")?.includes("text/event-stream")) return Response.json({ events: await readEvents(id, after) });
   const encoder = new TextEncoder();
-  let unsubscribe: (() => void) | null = null;
-  let heartbeat: ReturnType<typeof setInterval> | null = null;
-
+  let cancelled = false;
   const stream = new ReadableStream<Uint8Array>({
-    start(controller) {
-      const write = (chunk: string) => {
-        try {
-          controller.enqueue(encoder.encode(chunk));
-        } catch {
-          // Stream already closed; cleanup will run via cancel().
+    async start(controller) {
+      const abort = () => { cancelled = true; };
+      req.signal.addEventListener("abort", abort, { once: true });
+      try {
+        controller.enqueue(encoder.encode(": subscribed\n\n"));
+        while (!cancelled && !req.signal.aborted) {
+          // Re-check authentication so expired/revoked tokens cannot keep reading indefinitely.
+          await requireUser(req);
+          const events = await readEvents(id, after);
+          if (cancelled || req.signal.aborted) break;
+          for (const event of events) {
+            controller.enqueue(encoder.encode(`id: ${event.sequence}\nevent: ${event.type}\ndata: ${JSON.stringify(event.data)}\n\n`));
+            after = BigInt(event.sequence);
+          }
+          if (events.length === 100) continue;
+          controller.enqueue(encoder.encode(": heartbeat\n\n"));
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
-      };
-
-      // Initial comment + a synthetic hello so the client confirms the
-      // subscription is live before the first real event.
-      write(`: subscribed to ${contractId}\n\n`);
-      write(
-        `event: hello\ndata: ${JSON.stringify({ contractId, ts: new Date().toISOString() })}\n\n`,
-      );
-
-      unsubscribe = eventBus.subscribe((event) => {
-        if (event.contractId !== contractId) return;
-        write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
-      });
-
-      heartbeat = setInterval(() => write(`: heartbeat ${Date.now()}\n\n`), 15000);
-
-      // If the client disconnects, Next.js calls cancel(); clean up.
-      req.signal.addEventListener("abort", () => {
-        if (unsubscribe) unsubscribe();
-        if (heartbeat) clearInterval(heartbeat);
-        try {
-          controller.close();
-        } catch {
-          // Already closed.
-        }
-      });
+        if (!cancelled) controller.close();
+      } catch (error) { if (!cancelled) controller.error(error); }
+      finally { req.signal.removeEventListener("abort", abort); }
     },
-    cancel() {
-      if (unsubscribe) unsubscribe();
-      if (heartbeat) clearInterval(heartbeat);
-    },
+    cancel() { cancelled = true; },
   });
-
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream; charset=utf-8",
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-      "X-Accel-Buffering": "no",
-    },
-  });
-}
+  return new Response(stream, { headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no" } });
+}); }

@@ -1,46 +1,19 @@
 import { z } from "zod";
-
-/**
- * All environment access in the app goes through this module. Nowhere else
- * should call `process.env.X` directly — that keeps the "is this var
- * required, and did we validate it" question answered in exactly one place.
- *
- * API keys are intentionally optional: their absence flips the relevant
- * client into mock mode (see lib/brightdata/client.ts and
- * lib/parallel/client.ts) rather than crashing the app. This is what lets a
- * judge clone the repo and run the full self-heal loop with zero setup.
- */
+const optional = z.preprocess(v => v === "" ? undefined : v, z.string().optional());
 const envSchema = z.object({
-  // Required, no default: a missing DB URL is a boot-time error, never a
-  // silent fallback. The value itself lives only in .env.
   DATABASE_URL: z.string().min(1),
-
-  BRIGHTDATA_API_KEY: z.string().optional(),
+  APP_URL: z.string().url().default("http://localhost:3000"),
+  AUTH_MODE: z.enum(["google", "development"]).default("google"),
+  GOOGLE_CLIENT_ID: optional,
+  GOOGLE_CLIENT_SECRET: optional,
+  EXTRACTION_PROVIDER: z.enum(["fixture", "brightdata"]).default("fixture"),
+  BRIGHTDATA_API_KEY: optional,
   BRIGHTDATA_API_BASE: z.string().url().default("https://api.brightdata.com"),
-
-  PARALLEL_API_KEY: z.string().optional(),
-  PARALLEL_API_BASE: z.string().url().default("https://api.parallel.ai"),
-
-  WEBHOOK_SIGNING_SECRET: z.string().default("dev-secret-change-me"),
-
-  NODE_ENV: z
-    .enum(["development", "test", "production"])
-    .default("development"),
+  BRIGHTDATA_DELIVERY_EMAIL: z.preprocess(v => v === "" ? undefined : v, z.string().email().optional()),
+  WORKER_POLL_MS: z.coerce.number().int().min(100).default(1000),
+  PROVIDER_POLL_MS: z.coerce.number().int().min(100).default(5000),
+  MAX_HEAL_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(3),
+  RUN_TIMEOUT_MS: z.coerce.number().int().min(1000).max(86400000).default(1800000),
+  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
 });
-
-export type Env = z.infer<typeof envSchema>;
-
-function loadEnv(): Env {
-  const parsed = envSchema.safeParse(process.env);
-  if (!parsed.success) {
-    // Fail loudly at boot rather than surfacing a cryptic error mid-request.
-    console.error("Invalid environment configuration:", parsed.error.flatten().fieldErrors);
-    throw new Error("Invalid environment configuration — see logged field errors above.");
-  }
-  return parsed.data;
-}
-
-export const env = loadEnv();
-
-export const isMockBrightData = !env.BRIGHTDATA_API_KEY;
-export const isMockParallel = !env.PARALLEL_API_KEY;
+export const env = envSchema.parse(process.env);

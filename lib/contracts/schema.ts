@@ -1,51 +1,50 @@
 import { z } from "zod";
-
-/**
- * A ContractField is user-authored (via the dashboard or MCP `create_contract`
- * tool) and describes what "valid data from this source" means. It is the
- * single source of truth: the same field list is used to (a) build the
- * self-heal prompt Bright Data receives, (b) build the runtime Zod
- * validator, and (c) render the contract in the dashboard — so there is no
- * risk of the UI, the validator, and the heal prompt drifting apart.
- */
 export const contractFieldTypeSchema = z.enum(["string", "number", "boolean", "url"]);
 export type ContractFieldType = z.infer<typeof contractFieldTypeSchema>;
-
 export const contractFieldSchema = z.object({
-  key: z
-    .string()
-    .min(1)
-    .regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/, "Field key must be a valid identifier."),
+  key: z.string().min(1).max(64).regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/)
+    .refine(v => !["__proto__", "constructor", "prototype"].includes(v), "Reserved field name"),
   type: contractFieldTypeSchema,
   required: z.boolean().default(true),
-  /** Last known-good selector hint, fed to the heal prompt when this field breaks. */
-  selectorHint: z.string().optional(),
+  description: z.string().max(1000).optional(),
+  selectorHint: z.string().max(500).optional(),
+  minimum: z.number().finite().optional(),
+  maximum: z.number().finite().optional(),
+  expectedValue: z.union([z.string(), z.number().finite(), z.boolean()]).optional(),
+  maxRelativeChange: z.number().nonnegative().optional(),
+  ignoreCase: z.boolean().default(false),
+}).superRefine((f, ctx) => {
+  if (f.minimum !== undefined && f.maximum !== undefined && f.minimum > f.maximum)
+    ctx.addIssue({ code: "custom", message: "minimum exceeds maximum" });
+  if (f.type !== "number" && [f.minimum, f.maximum, f.maxRelativeChange].some(v => v !== undefined))
+    ctx.addIssue({ code: "custom", message: "Numeric constraints require a number field" });
+  if (f.expectedValue !== undefined && typeof f.expectedValue !== (f.type === "url" ? "string" : f.type))
+    ctx.addIssue({ code: "custom", message: "expectedValue must match the field type" });
 });
 export type ContractField = z.infer<typeof contractFieldSchema>;
-
 export const contractDefinitionSchema = z.object({
-  url: z.string().url(),
-  fields: z.array(contractFieldSchema).min(1, "A contract needs at least one field."),
-  pollIntervalMs: z.number().int().positive().default(5 * 60 * 1000),
+  url: z.string().url().max(2048).refine(v => {
+    const u = new URL(v); return ["http:", "https:"].includes(u.protocol) && !u.username && !u.password;
+  }, "Use an HTTP(S) URL without credentials"),
+  fields: z.array(contractFieldSchema).min(1).max(50).refine(f => new Set(f.map(x => x.key)).size === f.length, "Duplicate field keys"),
+  pollIntervalMs: z.number().int().min(10000).max(2147483647).default(300000),
+  collectorId: z.string().regex(/^c_[a-zA-Z0-9_]+$/).optional(),
+  enabled: z.boolean().default(true),
 });
 export type ContractDefinition = z.infer<typeof contractDefinitionSchema>;
-
-const ZOD_BY_FIELD_TYPE: Record<ContractFieldType, z.ZodTypeAny> = {
-  string: z.string().min(1),
-  number: z.number().finite(),
-  boolean: z.boolean(),
-  url: z.string().url(),
-};
-
-/**
- * Builds a Zod object schema from a contract's field list at runtime. This
- * is what "the contract" actually compiles down to when we validate an
- * extraction result — every run is checked against exactly this.
- */
-export function buildRuntimeValidator(fields: ContractField[]): z.ZodObject<z.ZodRawShape> {
-  const shape: z.ZodRawShape = {};
+export function buildRuntimeValidator(fields: ContractField[]) {
+  const shape: z.ZodRawShape = Object.create(null);
   for (const field of fields) {
-    const base = ZOD_BY_FIELD_TYPE[field.type];
+    let base: z.ZodTypeAny;
+    if (field.type === "number") {
+      let n = z.number().finite();
+      if (field.minimum !== undefined) n = n.min(field.minimum);
+      if (field.maximum !== undefined) n = n.max(field.maximum);
+      base = n;
+    } else if (field.type === "boolean") base = z.boolean();
+    else if (field.type === "url") base = z.string().url();
+    else base = z.string().trim().min(1);
+    if (field.expectedValue !== undefined) base = base.refine(v => v === field.expectedValue, "Value does not match the expected identity/value");
     shape[field.key] = field.required ? base : base.nullable().optional();
   }
   return z.object(shape);

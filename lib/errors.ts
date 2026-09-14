@@ -77,3 +77,7 @@ export function toErrorResponse(err: unknown): { status: number; body: { error: 
     body: { error: { code: "INTERNAL_ERROR", message: "Something went wrong." } },
   };
 }
+
+export class HttpError extends AppError {
+  constructor(readonly status: number, readonly code: string, message: string) { super(message); }
+}
