@@ -3,9 +3,9 @@ import { validateAgainstContract } from "@/lib/contracts/validator";
 import type { ContractField } from "@/lib/contracts/schema";
 
 const fields: ContractField[] = [
-  { key: "product", type: "string", required: true },
-  { key: "price", type: "number", required: true },
-  { key: "stock", type: "boolean", required: false },
+  { key: "product", type: "string", required: true, ignoreCase: false },
+  { key: "price", type: "number", required: true, ignoreCase: false },
+  { key: "stock", type: "boolean", required: false, ignoreCase: false },
 ];
 
 describe("validateAgainstContract", () => {

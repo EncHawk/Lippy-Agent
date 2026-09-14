@@ -1,50 +1,103 @@
-// Datasource is whatever DATABASE_URL points at (Postgres in deployment,
-// works with any Postgres provider). No hardcoded connection info here —
-// the URL comes exclusively from .env.
 generator client {
   provider = "prisma-client-js"
 }
-
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
-
+model User {
+  id        String @id @default(cuid())
+  googleSub String? @unique
+  email     String
+  createdAt DateTime @default(now())
+  contracts Contract[]
+  sessions  Session[]
+}
+model Session {
+  id        String @id @default(cuid())
+  tokenHash String @unique
+  userId    String
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind      String @default("session")
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  @@index([userId])
+}
+model OAuthAttempt {
+  stateHash String @id
+  verifier  String
+  nonce     String
+  expiresAt DateTime
+}
 model Contract {
-  id              String   @id @default(cuid())
-  url             String
-  schema          String   // JSON-encoded ContractField[]
-  pollIntervalMs  Int      @default(300000)
-  status          String   @default("healthy") // healthy | degraded | healing | broken
-  collectorId     String?  // Bright Data collector id (c_*)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  runs   Run[]
-  events ContractEvent[]
+  id             String @id @default(cuid())
+  ownerId        String?
+  owner          User? @relation(fields: [ownerId], references: [id])
+  url            String
+  schema         String
+  pollIntervalMs Int @default(300000)
+  status         String @default("pending")
+  collectorId    String? @unique
+  provider       String @default("fixture")
+  fixture        String?
+  enabled        Boolean @default(true)
+  nextRunAt      DateTime @default(now())
+  activeRunId    String? @unique
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  runs           Run[]
+  events         ContractEvent[]
+  @@index([ownerId, createdAt])
+  @@index([enabled, nextRunAt])
 }
-
 model Run {
-  id           String   @id @default(cuid())
-  contractId   String
-  contract     Contract @relation(fields: [contractId], references: [id])
-  startedAt    DateTime @default(now())
-  finishedAt   DateTime?
-  outcome      String?  // valid | violated | healed | escalated
-  rawOutput    String?  // JSON-encoded raw extraction
-  validated    String?  // JSON-encoded validated fields
-  violations   String?  // JSON-encoded list of field-level violations
-
+  id            String @id @default(cuid())
+  contractId    String
+  contract      Contract @relation(fields: [contractId], references: [id])
+  idempotencyKey String?
+  state         String @default("queued")
+  startedAt     DateTime @default(now())
+  finishedAt    DateTime?
+  outcome       String?
+  rawOutput     String?
+  validated     String?
+  violations    String?
+  fieldChanges  String?
+  providerJobId String?
+  healAttempts  Int @default(0)
+  retryCount    Int @default(0)
+  availableAt   DateTime @default(now())
+  deadlineAt    DateTime @default(dbgenerated("(now() + interval '30 minutes')"))
+  leaseToken    String?
+  leaseUntil    DateTime?
+  error         String?
+  events        ContractEvent[]
+  repairs       RepairAttempt[]
+  @@unique([contractId, idempotencyKey])
   @@index([contractId, startedAt])
+  @@index([finishedAt, availableAt, leaseUntil])
 }
-
+model RepairAttempt {
+  id         String @id @default(cuid())
+  runId      String
+  run        Run @relation(fields: [runId], references: [id])
+  attempt    Int
+  status     String
+  proposal   String?
+  violations String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  @@unique([runId, attempt])
+}
 model ContractEvent {
-  id         String   @id @default(cuid())
+  id         String @id @default(cuid())
+  sequence   BigInt @unique @default(autoincrement())
   contractId String
   contract   Contract @relation(fields: [contractId], references: [id])
-  type       String   // contract.violated | contract.healed | contract.escalated | field.changed
-  payload    String   // JSON-encoded ContractEvent union member
+  runId      String?
+  run        Run? @relation(fields: [runId], references: [id])
+  type       String
+  payload    String
   createdAt  DateTime @default(now())
-
-  @@index([contractId, createdAt])
+  @@index([contractId, sequence])
 }

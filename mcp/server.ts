@@ -1,64 +1,23 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { createContract, getContract, getContractHistory, triggerRun } from "@/lib/contracts/service";
-import { contractFieldSchema } from "@/lib/contracts/schema";
-
-/**
- * The MCP surface is intentionally a thin wrapper over the exact same
- * `lib/contracts/service.ts` functions the HTTP API routes call. An agent
- * calling `create_contract` and a person using the dashboard's "New
- * Contract" form go through identical validation and identical Bright Data
- * calls — there's exactly one code path for "create a contract," not two
- * that could drift.
- */
-export function createMcpServer() {
-  const server = new McpServer({ name: "web-contracts", version: "0.1.0" });
-
-  server.registerTool(
-    "create_contract",
-    {
-      description:
-        "Define a durable data contract for a website: a URL plus a typed schema of fields to extract. Returns a contract id.",
-      inputSchema: {
-        url: z.string().url(),
-        fields: z.array(contractFieldSchema),
-        pollIntervalMs: z.number().int().positive().optional(),
-      },
-    },
-    async ({ url, fields, pollIntervalMs }) => {
-      const contract = await createContract({ url, fields, pollIntervalMs });
-      return {
-        content: [{ type: "text", text: JSON.stringify({ contractId: contract.id, status: contract.status }) }],
-      };
-    },
-  );
-
-  server.registerTool(
-    "get_data",
-    {
-      description: "Get the current validated data for a contract, plus recent run history.",
-      inputSchema: { contractId: z.string() },
-    },
-    async ({ contractId }) => {
-      const [contract, history] = await Promise.all([getContract(contractId), getContractHistory(contractId)]);
-      return {
-        content: [{ type: "text", text: JSON.stringify({ contract, ...history }) }],
-      };
-    },
-  );
-
-  server.registerTool(
-    "watch_contract",
-    {
-      description:
-        "Trigger an immediate run of a contract (extract, validate, self-heal if needed, semantic-diff against the last known-good value). Events fire on the contract's SSE/webhook channel as they happen.",
-      inputSchema: { contractId: z.string() },
-    },
-    async ({ contractId }) => {
-      const result = await triggerRun(contractId);
-      return { content: [{ type: "text", text: JSON.stringify(result) }] };
-    },
-  );
-
+import { createContract, listContracts, getContract, triggerRun, getData, getRun } from "@/lib/contracts/service";
+import { contractDefinitionSchema } from "@/lib/contracts/schema";
+import { readEvents } from "@/lib/events/bus";
+import { cursor } from "@/lib/http";
+import { toErrorResponse } from "@/lib/errors";
+export function createMcpServer(ownerId: string) {
+  const server = new McpServer({ name: "lippy-agent", version: "1.0.0" });
+  async function result(action: () => Promise<unknown>) {
+    try { return { content: [{ type: "text" as const, text: JSON.stringify(await action()) }] }; }
+    catch (error) { return { isError: true, content: [{ type: "text" as const, text: JSON.stringify(toErrorResponse(error).body) }] }; }
+  }
+  server.registerTool("create_contract", { description: "Create an owned extraction contract; the worker provisions its scraper asynchronously.", inputSchema: contractDefinitionSchema.shape }, input => result(() => createContract(input, ownerId)));
+  server.registerTool("list_contracts", { description: "List your extraction contracts", inputSchema: {} }, () => result(() => listContracts(ownerId)));
+  server.registerTool("run_contract", { description: "Enqueue a run and return its persisted ID immediately", inputSchema: { contractId: z.string(), idempotencyKey: z.string().min(1).max(128).optional() } }, ({ contractId, idempotencyKey }) => result(() => triggerRun(contractId, ownerId, idempotencyKey)));
+  server.registerTool("get_run", { description: "Read persisted execution state, errors and repair attempts", inputSchema: { runId: z.string() } }, ({ runId }) => result(() => getRun(runId, ownerId)));
+  server.registerTool("get_data", { description: "Read last accepted data; unverified and suspicious results are excluded", inputSchema: { contractId: z.string() } }, ({ contractId }) => result(() => getData(contractId, ownerId)));
+  server.registerTool("watch_contract", { description: "Read durable events after a sequence cursor; call again with the last sequence to follow progress", inputSchema: { contractId: z.string(), after: z.string().optional() } }, ({ contractId, after }) => result(async () => {
+    await getContract(contractId, ownerId); return readEvents(contractId, cursor(after ?? null));
+  }));
   return server;
 }
